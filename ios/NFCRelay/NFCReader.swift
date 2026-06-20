@@ -76,7 +76,7 @@ class NFCReader: NSObject, ObservableObject, NFCTagReaderSessionDelegate {
         onTagDisconnected?()
     }
     
-    func tagReaderSession(_ session: NFCTagReaderSession, didDetectTags tags: [NFCTag]) {
+    func tagReaderSession(_ session: NFCTagReaderSession, didDetect tags: [NFCTag]) {
         log("NFC Tag detected. Connecting...")
         guard let firstTag = tags.first else {
             session.invalidate(errorMessage: "No tags found.")

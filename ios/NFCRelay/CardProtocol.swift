@@ -6,7 +6,7 @@ class CardProtocol: ObservableObject {
     @Published var paceResult: String = ""
     @Published var isRunning: Bool = false
     
-    private let sdk = CieSDKDigitalId()
+    private let sdk = CieSDK()
     private var cancellables = Set<AnyCancellable>()
     private var logCallback: ((String) -> Void)?
     
