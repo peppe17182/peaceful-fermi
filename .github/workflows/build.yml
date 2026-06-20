@@ -1,0 +1,55 @@
+name: Build iOS IPA
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    name: Build Unsigned IPA
+    runs-on: macos-14
+    
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+          
+      - name: Install XcodeGen
+        run: |
+          brew install xcodegen
+          
+      - name: Generate Xcode Project
+        run: |
+          cd ios
+          xcodegen generate
+          
+      - name: Build and Archive (Unsigned)
+        run: |
+          xcodebuild archive \
+            -project ios/NFCRelay.xcodeproj \
+            -scheme NFCRelay \
+            -configuration Release \
+            -archivePath ${{ runner.temp }}/NFCRelay.xcarchive \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO
+            
+      - name: Package Unsigned IPA
+        run: |
+          # Create Payload folder structure for IPA packaging
+          mkdir -p ${{ runner.temp }}/Payload
+          
+          # Copy the compiled .app bundle into the Payload folder
+          cp -R ${{ runner.temp }}/NFCRelay.xcarchive/Products/Applications/NFCRelay.app ${{ runner.temp }}/Payload/
+          
+          # Zip the Payload folder and rename to .ipa
+          cd ${{ runner.temp }}
+          zip -r NFCRelay-unsigned.ipa Payload
+          
+      - name: Upload Unsigned IPA Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NFCRelay-Unsigned-IPA
+          path: ${{ runner.temp }}/NFCRelay-unsigned.ipa
+          retention-days: 7

@@ -1,0 +1,24 @@
+name: NFCRelay
+options:
+  bundleIdPrefix: com.example
+targets:
+  NFCRelay:
+    type: application
+    platform: iOS
+    deploymentTarget: "15.0"
+    sources:
+      - path: NFCRelay
+    settings:
+      base:
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_ENTITLEMENTS: NFCRelay/NFCRelay.entitlements
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.NFCRelay
+        INFOPLIST_FILE: NFCRelay/Info.plist
+        SWIFT_VERSION: "5.5"
+    dependencies:
+      - package: cie-sdk-ios
+        product: CieSDKDigitalId
+packages:
+  cie-sdk-ios:
+    url: https://github.com/pagopa/cie-sdk-ios.git
+    from: 1.0.0
