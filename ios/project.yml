@@ -21,4 +21,4 @@ targets:
 packages:
   cie-sdk-ios:
     url: https://github.com/pagopa/cie-sdk-ios.git
-    from: 0.1.0
+    branch: main
