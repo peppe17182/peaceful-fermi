@@ -298,7 +298,8 @@ struct ContentView: View {
                                     &hostname, socklen_t(hostname.count),
                                     nil, socklen_t(0), NI_NUMERICHOST)
                         address = hostname.withUnsafeBufferPointer {
-                            String(decoding: $0.prefix(while: { $0 != 0 }), as: UTF8.self)
+                            let bytes = $0.prefix(while: { $0 != 0 }).map { UInt8(bitPattern: $0) }
+                            return String(decoding: bytes, as: UTF8.self)
                         }
                     }
                 }
