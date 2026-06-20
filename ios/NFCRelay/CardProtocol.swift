@@ -1,6 +1,6 @@
 import Foundation
 import Combine
-import CieSDKDigitalId
+import CieSDK
 
 class CardProtocol: ObservableObject {
     @Published var paceResult: String = ""

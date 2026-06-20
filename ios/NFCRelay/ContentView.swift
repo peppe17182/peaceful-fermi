@@ -1,4 +1,6 @@
 import SwiftUI
+import Foundation
+import Darwin
 
 struct ContentView: View {
     @StateObject private var nfcReader = NFCReader()

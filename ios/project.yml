@@ -17,8 +17,8 @@ targets:
         SWIFT_VERSION: "5.5"
     dependencies:
       - package: cie-sdk-ios
-        product: CieSDKDigitalId
+        product: CieSDK
 packages:
   cie-sdk-ios:
     url: https://github.com/pagopa/cie-sdk-ios.git
-    from: 1.0.0
+    from: 0.1.0
