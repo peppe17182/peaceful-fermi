@@ -21,8 +21,9 @@ class CardProtocol: ObservableObject {
         Task {
             do {
                 _ = try await cie.performMtrd(can: can) { @Sendable event, progress in
+                    let eventDesc = String(describing: event)
                     Task { @MainActor in
-                        logHandler("[\(Int(progress * 100))%] \(event)")
+                        logHandler("[\(Int(progress * 100))%] \(eventDesc)")
                     }
                 }
                 paceResult = "Success"
