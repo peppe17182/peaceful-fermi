@@ -14,13 +14,13 @@ class CardProtocol: ObservableObject {
 
     /// Starts PACE authentication using the 6-digit CAN printed on the CIE card.
     /// On success, reads DG1, DG11 and SOD from the chip.
-    func verifyPACE(can: String, logHandler: @escaping @MainActor (String) -> Void) {
+    func verifyPACE(can: String, logHandler: @escaping @MainActor @Sendable (String) -> Void) {
         guard !isRunning else { return }
         isRunning = true
 
         Task {
             do {
-                _ = try await cie.performMtrd(can: can) { event, progress in
+                _ = try await cie.performMtrd(can: can) { @Sendable event, progress in
                     Task { @MainActor in
                         logHandler("[\(Int(progress * 100))%] \(event)")
                     }

@@ -92,14 +92,17 @@ class NFCReader: NSObject, ObservableObject {
                 let atrHex = atr.map { String(format: "%02X", $0) }.joined()
                 let hbHex = historicalBytes.map { String(format: "%02X", $0) }.joined()
                 
+                nonisolated(unsafe) let safeTag = tag
+                nonisolated(unsafe) let safeSession = session
+                
                 Task { @MainActor in
-                    self.activeTag = tag
+                    self.activeTag = safeTag
                     self.connectedTagATR = atrHex
                     self.statusMessage = "Card connected!"
                     self.log("Successfully connected to ISO7816 Tag.")
                     self.log("ATS Historical Bytes: \(hbHex)")
                     self.log("Simulated ATR: \(atrHex)")
-                    session.alertMessage = "Card connected. Keep card near iPhone."
+                    safeSession.alertMessage = "Card connected. Keep card near iPhone."
                     self.onTagConnected?()
                 }
                 
