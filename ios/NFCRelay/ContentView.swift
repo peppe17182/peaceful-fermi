@@ -297,7 +297,9 @@ struct ContentView: View {
                         getnameinfo(addr, socklen_t(addr.pointee.sa_len),
                                     &hostname, socklen_t(hostname.count),
                                     nil, socklen_t(0), NI_NUMERICHOST)
-                        address = String(cString: hostname)
+                        address = hostname.withUnsafeBufferPointer {
+                            String(decoding: $0.prefix(while: { $0 != 0 }), as: UTF8.self)
+                        }
                     }
                 }
             }

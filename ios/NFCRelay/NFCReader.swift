@@ -2,7 +2,8 @@ import Foundation
 import CoreNFC
 import Combine
 
-class NFCReader: NSObject, ObservableObject, NFCTagReaderSessionDelegate {
+@MainActor
+class NFCReader: NSObject, ObservableObject {
     @Published var statusMessage: String = "Ready to scan"
     @Published var isSessionActive: Bool = false
     @Published var connectedTagATR: String = ""
@@ -16,12 +17,10 @@ class NFCReader: NSObject, ObservableObject, NFCTagReaderSessionDelegate {
     var onTagDisconnected: (() -> Void)?
     
     func log(_ message: String) {
-        DispatchQueue.main.async {
-            let timestamp = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
-            self.logs.append("[\(timestamp)] \(message)")
-            if self.logs.count > 100 {
-                self.logs.removeFirst()
-            }
+        let timestamp = DateFormatter.localizedString(from: Date(), dateStyle: .none, timeStyle: .medium)
+        logs.append("[\(timestamp)] \(message)")
+        if logs.count > 100 {
+            logs.removeFirst()
         }
     }
     
@@ -39,87 +38,82 @@ class NFCReader: NSObject, ObservableObject, NFCTagReaderSessionDelegate {
         session?.invalidate()
         session = nil
         activeTag = nil
-        DispatchQueue.main.async {
-            self.isSessionActive = false
-        }
+        isSessionActive = false
     }
     
-    // MARK: - NFCTagReaderSessionDelegate
+    // MARK: - NFCTagReaderSessionDelegate (called on NFC internal queue, hop to MainActor)
     
-    func tagReaderSessionDidBecomeActive(_ session: NFCTagReaderSession) {
-        log("NFC Session Active.")
-        DispatchQueue.main.async {
+    nonisolated func tagReaderSessionDidBecomeActive(_ session: NFCTagReaderSession) {
+        Task { @MainActor in
+            self.log("NFC Session Active.")
             self.isSessionActive = true
             self.statusMessage = "Hold card near iPhone"
         }
     }
     
-    func tagReaderSession(_ session: NFCTagReaderSession, didInvalidateWithError error: Error) {
-        let nfcError = error as NSError
-        if nfcError.code == 200 { // User cancelled
-            log("NFC Session cancelled by user.")
-            DispatchQueue.main.async {
+    nonisolated func tagReaderSession(_ session: NFCTagReaderSession, didInvalidateWithError error: Error) {
+        Task { @MainActor in
+            let nfcError = error as NSError
+            if nfcError.code == 200 { // User cancelled
+                self.log("NFC Session cancelled by user.")
                 self.statusMessage = "Scan cancelled"
-            }
-        } else {
-            log("NFC Session invalidated with error: \(error.localizedDescription)")
-            DispatchQueue.main.async {
+            } else {
+                self.log("NFC Session invalidated with error: \(error.localizedDescription)")
                 self.statusMessage = "Error: \(error.localizedDescription)"
             }
-        }
-        
-        DispatchQueue.main.async {
             self.isSessionActive = false
             self.connectedTagATR = ""
+            self.activeTag = nil
+            self.onTagDisconnected?()
         }
-        activeTag = nil
-        onTagDisconnected?()
     }
     
-    func tagReaderSession(_ session: NFCTagReaderSession, didDetect tags: [NFCTag]) {
-        log("NFC Tag detected. Connecting...")
+    nonisolated func tagReaderSession(_ session: NFCTagReaderSession, didDetect tags: [NFCTag]) {
         guard let firstTag = tags.first else {
             session.invalidate(errorMessage: "No tags found.")
             return
         }
         
         session.connect(to: firstTag) { [weak self] (error: Error?) in
-            guard let self = self else { return }
+            guard let self else { return }
             
             if let error = error {
-                self.log("Connection failed: \(error.localizedDescription)")
+                Task { @MainActor in
+                    self.log("Connection failed: \(error.localizedDescription)")
+                }
                 session.invalidate(errorMessage: "Connection failed: \(error.localizedDescription)")
                 return
             }
             
             switch firstTag {
             case .iso7816(let tag):
-                self.activeTag = tag
                 let historicalBytes = tag.historicalBytes ?? Data()
                 let atr = self.deriveATR(from: historicalBytes)
+                let atrHex = atr.map { String(format: "%02X", $0) }.joined()
+                let hbHex = historicalBytes.map { String(format: "%02X", $0) }.joined()
                 
-                DispatchQueue.main.async {
-                    self.connectedTagATR = atr.map { String(format: "%02X", $0) }.joined()
+                Task { @MainActor in
+                    self.activeTag = tag
+                    self.connectedTagATR = atrHex
                     self.statusMessage = "Card connected!"
+                    self.log("Successfully connected to ISO7816 Tag.")
+                    self.log("ATS Historical Bytes: \(hbHex)")
+                    self.log("Simulated ATR: \(atrHex)")
+                    session.alertMessage = "Card connected. Keep card near iPhone."
+                    self.onTagConnected?()
                 }
                 
-                self.log("Successfully connected to ISO7816 Tag.")
-                self.log("ATS Historical Bytes: \(historicalBytes.map { String(format: "%02X", $0) }.joined())")
-                self.log("Simulated ATR: \(self.connectedTagATR)")
-                
-                // Keep the session alive and notify listeners
-                session.alertMessage = "Card connected. Keep card near iPhone."
-                self.onTagConnected?()
-                
             default:
-                self.log("Unsupported tag type.")
                 session.invalidate(errorMessage: "Unsupported tag type. Needs ISO7816.")
+                Task { @MainActor in
+                    self.log("Unsupported tag type.")
+                }
             }
         }
     }
     
     // Derives an ATR from historical bytes (or returns a default CIE ATR if empty)
-    private func deriveATR(from historicalBytes: Data) -> Data {
+    nonisolated private func deriveATR(from historicalBytes: Data) -> Data {
         let defaultCIEATR = Data([
             0x3B, 0x8F, 0x80, 0x01, 0x80, 0x4F, 0x0C, 0xA0, 0x00, 0x00, 0x03, 0x06, 0x03, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x6A
         ])
@@ -154,10 +148,10 @@ class NFCReader: NSObject, ObservableObject, NFCTagReaderSessionDelegate {
         
         return try await withCheckedThrowingContinuation { continuation in
             tag.sendCommand(apdu: apdu) { [weak self] (responseData: Data, sw1: UInt8, sw2: UInt8, error: Error?) in
-                guard let self = self else { return }
-                
                 if let error = error {
-                    self.log("Command error: \(error.localizedDescription)")
+                    Task { @MainActor in
+                        self?.log("Command error: \(error.localizedDescription)")
+                    }
                     continuation.resume(throwing: error)
                     return
                 }
@@ -166,9 +160,14 @@ class NFCReader: NSObject, ObservableObject, NFCTagReaderSessionDelegate {
                 fullResponse.append(sw1)
                 fullResponse.append(sw2)
                 
-                self.log("<-- \(fullResponse.map { String(format: "%02X", $0) }.joined(separator: " "))")
+                Task { @MainActor in
+                    self?.log("<-- \(fullResponse.map { String(format: "%02X", $0) }.joined(separator: " "))")
+                }
                 continuation.resume(returning: fullResponse)
             }
         }
     }
 }
+
+// MARK: - NFCTagReaderSessionDelegate conformance (nonisolated methods declared above)
+extension NFCReader: NFCTagReaderSessionDelegate {}
